@@ -1,0 +1,22 @@
+{
+  "name": "landing-vibe-coding-project",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+  },
+  "devDependencies": {}
+}
