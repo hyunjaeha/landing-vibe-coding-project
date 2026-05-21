@@ -1,180 +1,196 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { operatingChecklist, schedules } from "@/lib/workshop-data";
 
-export default function AdminPage({ operationsChecklist }) {
+export default function AdminPage() {
   const [accessKey, setAccessKey] = useState("");
-  const [authState, setAuthState] = useState("idle");
-  const [listState, setListState] = useState("idle");
-  const [message, setMessage] = useState("");
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [loginMessage, setLoginMessage] = useState("");
   const [inquiries, setInquiries] = useState([]);
+  const [listState, setListState] = useState({ type: "idle", message: "" });
 
   async function login(event) {
     event.preventDefault();
-    setAuthState("loading");
-    setMessage("");
+    setLoginMessage("");
 
-    try {
-      const response = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ accessKey }),
-      });
-      const payload = await response.json();
+    const response = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ accessKey })
+    });
 
-      if (!response.ok) {
-        setAuthState("error");
-        setMessage(payload.message || "접근 권한이 없습니다.");
-        return;
-      }
+    const result = await readJsonResponse(response);
 
-      setAuthState("success");
-      setMessage("접근이 확인되었습니다.");
-      await loadInquiries();
-    } catch (error) {
-      setAuthState("error");
-      setMessage("관리자 접근 확인에 실패했습니다.");
+    if (!response.ok) {
+      setLoginMessage(result.message ?? "관리자 접근 값이 올바르지 않습니다.");
+      setIsAuthed(false);
+      return;
     }
+
+    setIsAuthed(true);
+    setAccessKey("");
   }
 
   async function loadInquiries() {
-    setListState("loading");
+    setListState({ type: "loading", message: "문의 목록을 불러오는 중입니다." });
 
-    try {
-      const response = await fetch("/api/admin/inquiries");
-      const payload = await response.json();
+    const response = await fetch("/api/admin/inquiries", {
+      credentials: "same-origin"
+    });
+    const result = await readJsonResponse(response);
 
-      if (!response.ok) {
-        setListState("error");
-        setMessage(payload.message || "문의 목록을 불러오지 못했습니다.");
-        return;
-      }
-
-      setInquiries(payload.inquiries || []);
-      setListState("success");
-    } catch (error) {
-      setListState("error");
-      setMessage("문의 목록을 불러오지 못했습니다.");
+    if (!response.ok) {
+      setListState({
+        type: "error",
+        message: result.message ?? "문의 목록을 불러오지 못했습니다."
+      });
+      setInquiries([]);
+      return;
     }
+
+    setInquiries(result.inquiries ?? []);
+    setListState({ type: "success", message: "" });
   }
 
-  const canViewList = authState === "success";
+  useEffect(() => {
+    if (isAuthed) {
+      loadInquiries();
+    }
+  }, [isAuthed]);
 
   return (
-    <main className="admin-shell">
+    <main className="admin-page">
       <section className="admin-hero">
-        <a className="inline-link" href="/">
-          공개 랜딩으로 이동
-        </a>
-        <h1>관리자 문의 목록</h1>
-        <p>접수된 문의를 확인하고 운영 체크리스트를 참고하는 최소 관리자 화면입니다.</p>
+        <p className="badge">관리자</p>
+        <h1>문의 접수 확인</h1>
+        <p>단일 관리자 접근 보호 뒤에서 문의 목록과 정적 운영 체크리스트만 확인합니다.</p>
       </section>
 
-      <section className="admin-panel" aria-labelledby="admin-login-heading">
-        <h2 id="admin-login-heading">관리자 접근</h2>
-        <form className="admin-login" onSubmit={login}>
-          <label>
-            접근 키
+      {!isAuthed ? (
+        <section className="admin-panel" aria-labelledby="admin-login-title">
+          <h2 id="admin-login-title">관리자 접근</h2>
+          <form className="admin-login" onSubmit={login}>
+            <label htmlFor="accessKey">접근 값</label>
             <input
-              autoComplete="off"
+              id="accessKey"
               name="accessKey"
-              onChange={(event) => setAccessKey(event.target.value)}
               type="password"
               value={accessKey}
+              onChange={(event) => setAccessKey(event.target.value)}
+              autoComplete="current-password"
             />
-          </label>
-          <button className="primary-button" disabled={authState === "loading"} type="submit">
-            {authState === "loading" ? "확인 중" : "문의 목록 보기"}
-          </button>
-        </form>
-        {message ? (
-          <p
-            className={`result-message ${authState === "success" ? "success" : "error"}`}
-            role="status"
-          >
-            {message}
-          </p>
-        ) : null}
-      </section>
-
-      {canViewList ? (
-        <section className="admin-panel" aria-labelledby="inquiries-heading">
-          <div className="admin-panel-header">
-            <h2 id="inquiries-heading">접수된 문의</h2>
-            <button className="secondary-button compact" type="button" onClick={loadInquiries}>
-              새로고침
+            {loginMessage ? (
+              <p className="field-error" role="alert">
+                {loginMessage}
+              </p>
+            ) : null}
+            <button className="button button--primary" type="submit">
+              문의 목록 보기
             </button>
-          </div>
+          </form>
+        </section>
+      ) : (
+        <>
+          <section className="admin-panel" aria-labelledby="inquiry-list-title">
+            <div className="admin-panel__header">
+              <div>
+                <h2 id="inquiry-list-title">문의 목록</h2>
+                <p>최신 문의 50건을 표시합니다.</p>
+              </div>
+              <button className="button button--secondary" type="button" onClick={loadInquiries}>
+                새로고침
+              </button>
+            </div>
 
-          {listState === "loading" ? <p className="notice">문의 목록을 불러오는 중입니다.</p> : null}
-          {listState === "error" ? (
-            <p className="notice error">문의 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
-          ) : null}
-          {listState === "success" && inquiries.length === 0 ? (
-            <p className="notice">아직 접수된 문의가 없습니다.</p>
-          ) : null}
-          {inquiries.length > 0 ? (
-            <div className="inquiry-list">
-              {inquiries.map((inquiry) => (
-                <article className="inquiry-item" key={inquiry.id}>
-                  <div>
-                    <h3>{inquiry.name}</h3>
-                    <p>{inquiry.phone}</p>
-                  </div>
-                  <dl>
+            {listState.type === "loading" ? <p role="status">{listState.message}</p> : null}
+            {listState.type === "error" ? (
+              <p className="form-message form-message--error" role="alert">
+                {listState.message}
+              </p>
+            ) : null}
+            {listState.type === "success" && inquiries.length === 0 ? (
+              <p className="empty-state">아직 접수된 문의가 없습니다.</p>
+            ) : null}
+
+            {inquiries.length > 0 ? (
+              <div className="inquiry-list">
+                {inquiries.map((inquiry) => (
+                  <article className="inquiry-card" key={inquiry.id}>
                     <div>
-                      <dt>희망 일정</dt>
-                      <dd>{inquiry.preferredSchedule}</dd>
+                      <h3>{inquiry.name}</h3>
+                      <p>{formatSchedule(inquiry.preferred_schedule)}</p>
                     </div>
-                    <div>
-                      <dt>참여 인원</dt>
-                      <dd>{inquiry.participantCount ? `${inquiry.participantCount}명` : "미입력"}</dd>
-                    </div>
-                    <div>
-                      <dt>문의 내용</dt>
-                      <dd>{inquiry.message || "문의 내용 없음"}</dd>
-                    </div>
-                    <div>
-                      <dt>접수 시간</dt>
-                      <dd>{formatDate(inquiry.createdAt)}</dd>
-                    </div>
-                  </dl>
+                    <dl>
+                      <div>
+                        <dt>전화번호</dt>
+                        <dd>{inquiry.phone}</dd>
+                      </div>
+                      <div>
+                        <dt>참여 인원</dt>
+                        <dd>{inquiry.participant_count ? `${inquiry.participant_count}명` : "미입력"}</dd>
+                      </div>
+                      <div>
+                        <dt>접수 시간</dt>
+                        <dd>{formatDate(inquiry.created_at)}</dd>
+                      </div>
+                      <div>
+                        <dt>문의 내용</dt>
+                        <dd>{inquiry.message || "문의 내용 없음"}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="admin-panel" aria-labelledby="checklist-title">
+            <h2 id="checklist-title">정적 운영 체크리스트</h2>
+            <div className="checklist-grid">
+              {operatingChecklist.map((group) => (
+                <article className="checklist-card" key={group.group}>
+                  <h3>{group.group}</h3>
+                  <ul>
+                    {group.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
                 </article>
               ))}
             </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      <section className="admin-panel" aria-labelledby="checklist-heading">
-        <h2 id="checklist-heading">정적 운영 체크리스트</h2>
-        <p className="subtle">체크 상태는 저장하지 않습니다. 실제 처리는 운영자가 별도 메모로 관리합니다.</p>
-        <div className="checklist-grid">
-          {operationsChecklist.map((group) => (
-            <article className="checklist-card" key={group.group}>
-              <h3>{group.group}</h3>
-              <ul>
-                {group.items.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </section>
+          </section>
+        </>
+      )}
     </main>
   );
 }
 
+function formatSchedule(id) {
+  const schedule = schedules.find((item) => item.id === id);
+  return schedule ? `${schedule.label} · ${schedule.statusText}` : id;
+}
+
+async function readJsonResponse(response) {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  return {
+    message: "서버 응답 형식이 올바르지 않습니다. 잠시 후 다시 시도해 주세요."
+  };
+}
+
 function formatDate(value) {
   if (!value) {
-    return "접수 시간 없음";
+    return "시간 없음";
   }
 
   return new Intl.DateTimeFormat("ko-KR", {
     dateStyle: "medium",
-    timeStyle: "short",
+    timeStyle: "short"
   }).format(new Date(value));
 }

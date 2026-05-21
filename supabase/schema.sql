@@ -1,3 +1,5 @@
+create extension if not exists pgcrypto;
+
 create table if not exists public.inquiries (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -11,5 +13,7 @@ create table if not exists public.inquiries (
 
 alter table public.inquiries enable row level security;
 
--- This MVP writes and reads inquiries through server-side code using a
--- Supabase service role key. Do not grant anon table access for this table.
+revoke all on table public.inquiries from anon, authenticated;
+
+create index if not exists inquiries_created_at_idx
+  on public.inquiries (created_at desc);

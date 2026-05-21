@@ -1,49 +1,44 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-export const ADMIN_COOKIE_NAME = "workshop_admin_session";
+export const ADMIN_COOKIE_NAME = "workshop_admin";
 
-function getAdminSecret() {
-  return process.env.ADMIN_ACCESS_KEY || "";
+function digest(value) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
-export function isAdminConfigured() {
-  return getAdminSecret().length >= 8;
+function safeCompare(a, b) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
-export function getAdminSessionToken() {
-  const secret = getAdminSecret();
+export function hasAdminSecret() {
+  return Boolean(process.env.ADMIN_ACCESS_KEY);
+}
+
+export function createAdminToken() {
+  const secret = process.env.ADMIN_ACCESS_KEY;
   if (!secret) {
-    return "";
+    return null;
   }
 
-  return createHash("sha256").update(`workshop-admin:${secret}`).digest("hex");
+  return digest(secret);
 }
 
-export function verifyAdminAccessKey(value) {
-  const secret = getAdminSecret();
-  const input = typeof value === "string" ? value : "";
-
-  if (!secret || !input) {
+export function verifyAdminKey(candidate) {
+  const expected = process.env.ADMIN_ACCESS_KEY;
+  if (!expected || typeof candidate !== "string" || !candidate) {
     return false;
   }
 
-  const secretBuffer = Buffer.from(secret);
-  const inputBuffer = Buffer.from(input);
-
-  if (secretBuffer.length !== inputBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(secretBuffer, inputBuffer);
+  return safeCompare(digest(candidate), digest(expected));
 }
 
-export function verifyAdminSessionToken(value) {
-  const expected = getAdminSessionToken();
-  const input = typeof value === "string" ? value : "";
-
-  if (!expected || !input || expected.length !== input.length) {
+export function verifyAdminToken(candidate) {
+  const expected = createAdminToken();
+  if (!expected || typeof candidate !== "string" || !candidate) {
     return false;
   }
 
-  return timingSafeEqual(Buffer.from(expected), Buffer.from(input));
+  return safeCompare(candidate, expected);
 }
